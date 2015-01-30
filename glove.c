@@ -45,6 +45,7 @@ int num_iter = 25; // Number of full passes through cooccurrence matrix
 int vector_size = 50; // Word vector size
 int save_gradsq = 0; // By default don't save squared gradient values
 int use_binary = 1; // 0: save as text files; 1: save as binary; 2: both. For binary, save both word and context word vectors.
+int word2vec = 1;
 int model = 2; // For text file output only. 0: concatenate word and context vectors (and biases) i.e. save everything; 1: Just save word vectors (no bias); 2: Save (word + context word) vectors (no biases)
 real eta = 0.05; // Initial learning rate
 real alpha = 0.75, x_max = 100.0; // Weighting function parameters, not extremely sensitive to corpus, though may need adjustment for very small or very large corpora
@@ -141,14 +142,28 @@ int save_params() {
         sprintf(output_file,"%s.bin",save_W_file);
         fout = fopen(output_file,"wb");
         if(fout == NULL) {fprintf(stderr, "Unable to open file %s.\n",save_W_file); return 1;}
-        for(a = 0; a < 2 * (long long)vocab_size * (vector_size + 1); a++) fwrite(&W[a], sizeof(real), 1,fout);
-        fclose(fout);
-        if(save_gradsq > 0) {
-            sprintf(output_file_gsq,"%s.bin",save_gradsq_file);
-            fgs = fopen(output_file_gsq,"wb");
-            if(fgs == NULL) {fprintf(stderr, "Unable to open file %s.\n",save_gradsq_file); return 1;}
-            for(a = 0; a < 2 * (long long)vocab_size * (vector_size + 1); a++) fwrite(&gradsq[a], sizeof(real), 1,fgs);
-            fclose(fgs);
+        if (!word2vec) { // Save word2vec format for evaluation
+			for(a = 0; a < 2 * (long long)vocab_size * (vector_size + 1); a++) fwrite(&W[a], sizeof(real), 1,fout);
+			fclose(fout);
+			if(save_gradsq > 0) {
+				sprintf(output_file_gsq,"%s.bin",save_gradsq_file);
+				fgs = fopen(output_file_gsq,"wb");
+				if(fgs == NULL) {fprintf(stderr, "Unable to open file %s.\n",save_gradsq_file); return 1;}
+				for(a = 0; a < 2 * (long long)vocab_size * (vector_size + 1); a++) fwrite(&gradsq[a], sizeof(real), 1,fgs);
+				fclose(fgs);
+			}
+        } else {
+        	fprintf(fout, "%lld %lld\n", vocab_size, vector_size);
+        	fid = fopen(vocab_file, "r");
+        	if (fid == NULL) {fprintf(stderr, "Unable to open file %s. \n", vocab_file); return 1;}
+        	sprintf(format, "%%%ds", MAX_STRING_LENGTH);
+        	for (a = 0; a < vocab_size; a++) {
+        		if (scanf(fid, format, word) == 0) return 1;
+        		fprintf(fout, "%s ", word);
+        		for (b = 0; b < vector_size; b++) fwrite(&W[a * (vector_size + 1) + b], sizeof(real), 1, fout);
+        		fprintf(fout, "\n");
+        		if (fscanf(fid, format, word) == 0) return 1;
+        	}
         }
     }
     if(use_binary != 1) { // Save parameters in text file
